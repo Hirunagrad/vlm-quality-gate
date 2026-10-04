@@ -18,7 +18,7 @@ def run_drift_detection():
         base_img = preprocess_image("test.jpg")
     except FileNotFoundError:
         print("CRITICAL ERROR: 'test.jpg' not found. Please ensure it is in the backend/ folder.")
-        return
+        return False
 
     # 2. Simulate a "Reference Dataset" (e.g., your COCO training data)
     print("Generating reference distribution (Baseline)...")
@@ -37,7 +37,6 @@ def run_drift_detection():
     test_normal = np.array([base_img, base_img]) 
     preds_normal = cd.predict(test_normal)
     is_drift_normal = bool(preds_normal['data']['is_drift'])
-    # FIX: Removed the [0] from p_val
     print(f"Result -> is_drift: {is_drift_normal} (P-value: {preds_normal['data']['p_val']:.4f})")
 
     # 5. Test Case B: Bad Traffic (Drift)
@@ -45,7 +44,6 @@ def run_drift_detection():
     test_anomaly = np.random.uniform(0, 1, size=(2, base_img.shape[0])).astype(np.float32)
     preds_anomaly = cd.predict(test_anomaly)
     is_drift_anomaly = bool(preds_anomaly['data']['is_drift'])
-    # FIX: Removed the [0] from p_val
     print(f"Result -> is_drift: {is_drift_anomaly} (P-value: {preds_anomaly['data']['p_val']:.4f})")
     
     # 6. Final Output
@@ -53,11 +51,15 @@ def run_drift_detection():
     print("TSK-203 Drift Evaluation Complete!")
     print(f"Successfully returned boolean - Anomaly Blocked: {is_drift_anomaly}")
     print("="*55 + "\n")
+    
+    # NEW: Return the variable so the main block can use it
+    return is_drift_anomaly
 
 if __name__ == "__main__":
-    run_drift_detection()
+    # NEW: Capture the returned variable
+    is_drift_anomaly = run_drift_detection()
     
-# 6. Quality Gate Blocking Logic
+    # 6. Quality Gate Blocking Logic
     print("\n" + "="*55)
     if is_drift_anomaly:
         print("🚨 DRIFT DETECTED: Anomalous traffic blocked. Halting deployment!")
@@ -66,7 +68,3 @@ if __name__ == "__main__":
         print("✅ DRIFT CHECK PASSED: Traffic is safe.")
         sys.exit(0)
     print("="*55 + "\n")
-
-if __name__ == "__main__":
-    run_drift_detection()
-    
