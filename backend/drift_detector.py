@@ -34,7 +34,11 @@ def run_drift_detection():
 
     # 4. Test Case A: Normal Traffic (No Drift)
     print("\n--- Test Case A: Normal Traffic (Standard Image) ---")
-    test_normal = np.array([base_img, base_img]) 
+    # FIX: Add the same 5% variance to normal traffic so it matches the reference distribution
+    noise1 = np.random.normal(0, 0.05, base_img.shape)
+    noise2 = np.random.normal(0, 0.05, base_img.shape)
+    test_normal = np.array([base_img + noise1, base_img + noise2], dtype=np.float32) 
+    
     preds_normal = cd.predict(test_normal)
     is_drift_normal = bool(preds_normal['data']['is_drift'])
     print(f"Result -> is_drift: {is_drift_normal} (P-value: {preds_normal['data']['p_val']:.4f})")
@@ -49,7 +53,6 @@ def run_drift_detection():
     # 6. Final Output
     print("\n" + "="*55)
     print("TSK-203 Drift Evaluation Complete!")
-    # FIX FOR 403: Pass the normal traffic variable so the pipeline proceeds
     print(f"Successfully returned boolean - Normal Traffic Blocked: {is_drift_normal}")
     print("="*55 + "\n")
     
@@ -66,4 +69,3 @@ if __name__ == "__main__":
     else:
         print("✅ DRIFT CHECK PASSED: Traffic is safe.")
         sys.exit(0)
-    print("="*55 + "\n")
