@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 from alibi_detect.cd import MMDDrift
+import sys
 
 def preprocess_image(image_path):
     # Open image, resize to a small resolution to keep math fast, convert to RGB
@@ -55,3 +56,17 @@ def run_drift_detection():
 
 if __name__ == "__main__":
     run_drift_detection()
+    
+# 6. Quality Gate Blocking Logic
+    print("\n" + "="*55)
+    if is_drift_anomaly:
+        print("🚨 DRIFT DETECTED: Anomalous traffic blocked. Halting deployment!")
+        sys.exit(1) # This forces the GitHub Action to fail
+    else:
+        print("✅ DRIFT CHECK PASSED: Traffic is safe.")
+        sys.exit(0)
+    print("="*55 + "\n")
+
+if __name__ == "__main__":
+    run_drift_detection()
+    

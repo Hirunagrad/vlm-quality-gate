@@ -37,7 +37,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      # 2. Build the evaluations table in the cloud database
       - name: Initialize Database Schema
         run: |
           sudo apt-get install -y postgresql-client
@@ -48,6 +47,11 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Enforce Data Drift Quality Gate
+        run: |
+          cd backend
+          python drift_detector.py
 
       - name: Execute Evaluation Engine & Enforce Quality Gate
         run: |
