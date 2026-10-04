@@ -37,6 +37,7 @@ jobs:
         with:
           python-version: '3.12'
 
+      # 2. Build the evaluations table in the cloud database
       - name: Initialize Database Schema
         run: |
           sudo apt-get install -y postgresql-client
@@ -53,13 +54,7 @@ jobs:
           cd backend
           python drift_detector.py
 
-      - name: Execute Evaluation Engine & Enforce Quality Gate
+      - name: Execute Evaluation Engine & Log Results
         run: |
           cd backend
           python eval_engine.py
-          if [ $? -ne 0 ]; then
-            echo "🚨 QUALITY GATE BLOCKED: Hallucination or Drift threshold exceeded."
-            exit 1
-          else
-            echo "✅ QUALITY GATE PASSED: Model safe for deployment."
-          fi
