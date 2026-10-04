@@ -2,6 +2,7 @@ import torch
 from PIL import Image
 from transformers import BlipProcessor, BlipForConditionalGeneration
 from db_connector import log_evaluation # NEW: Import your DB script
+import sys
 
 def run_baseline_evaluation():
     print("Loading VLM Engine...")
@@ -30,12 +31,22 @@ def run_baseline_evaluation():
 
     # NEW: Automatically log to the database
     print("Logging results to metric store...")
+    # NEW: Simulated Bad Update Metrics
+    simulated_hallucination_rate = 0.35 # 35% hallucination rate
+    threshold = 0.20 # Maximum allowable rate
+
+    print("Logging results to metric store...")
     log_evaluation(
-        model_version="blip-image-captioning-base",
-        cider_score=0.0000, # Placeholder until we implement real scoring
-        hallucination_rate=0.0000, 
-        deployment_status="TESTING"
+        model_version="blip-image-captioning-base-DEGRADED",
+        cider_score=0.1500, 
+        hallucination_rate=simulated_hallucination_rate, 
+        deployment_status="BLOCKED"
     )
+
+    # NEW: Quality Gate Blocking Logic
+    if simulated_hallucination_rate > threshold:
+        print(f"\n❌ FATAL: Hallucination rate ({simulated_hallucination_rate}) exceeds maximum safety threshold ({threshold})!")
+        sys.exit(1) # This forces the GitHub Action to fail
 
 if __name__ == "__main__":
     run_baseline_evaluation()
