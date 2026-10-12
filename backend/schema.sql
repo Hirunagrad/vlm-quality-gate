@@ -1,8 +1,11 @@
-CREATE TABLE IF NOT EXISTS evaluations (
+DROP TABLE IF EXISTS evaluations;
+
+CREATE TABLE evaluations (
     id SERIAL PRIMARY KEY,
     model_version VARCHAR(255) NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    cider_score NUMERIC(5, 4) NOT NULL,
-    hallucination_rate NUMERIC(5, 4) NOT NULL,
-    deployment_status VARCHAR(50) NOT NULL
+    mmd_p_value NUMERIC(6,4),
+    similarity_score NUMERIC(6,4),
+    hallucination_rate NUMERIC(6,4),
+    deployment_status VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
