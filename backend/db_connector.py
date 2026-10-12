@@ -1,55 +1,34 @@
 import psycopg2
-from psycopg2 import Error
+from datetime import datetime
 
-# These credentials match your Docker setup (Port 5433, password 1234)
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5433", 
-    "database": "vlm_metrics",
+DB_PARAMS = {
+    "dbname": "vlm_metrics",
     "user": "root",
-    "password": "1234"
+    "password": "1234",
+    "host": "localhost",
+    "port": "5433"
 }
 
-def log_evaluation(model_version, cider_score, hallucination_rate, deployment_status):
-    """Connects to PostgreSQL and inserts a new evaluation row."""
-    connection = None
+def log_evaluation(model_version, similarity_score, hallucination_rate, deployment_status, mmd_p_value=None):
     try:
-        # 1. Establish the connection to PostgreSQL
-        connection = psycopg2.connect(**DB_CONFIG)
-        cursor = connection.cursor()
-
-        # 2. SQL query to insert evaluation metrics into the 'evaluations' table
-        insert_query = """
-            INSERT INTO evaluations (model_version, cider_score, hallucination_rate, deployment_status)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id, timestamp;
-        """
+        conn = psycopg2.connect(**DB_PARAMS)
+        cur = conn.cursor()
         
-        # 3. Execute the SQL command with values
-        cursor.execute(insert_query, (model_version, cider_score, hallucination_rate, deployment_status))
-        connection.commit()
-
-        # 4. Retrieve the newly created ID and timestamp
-        inserted_row = cursor.fetchone()
+        query = """
+        INSERT INTO evaluations (model_version, mmd_p_value, similarity_score, hallucination_rate, deployment_status, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;
+        """
+        values = (model_version, mmd_p_value, similarity_score, hallucination_rate, deployment_status, datetime.now())
+        
+        cur.execute(query, values)
+        row_id = cur.fetchone()[0]
+        conn.commit()
+        
         print(f"✅ SUCCESS: Logged {model_version} to database!")
-        print(f"   -> DB Row ID: {inserted_row[0]}")
-        print(f"   -> Timestamp: {inserted_row[1]}")
-
-    except Error as e:
+        print(f"   -> DB Row ID: {row_id}")
+        print(f"   -> Timestamp: {values[5]}")
+        
+        cur.close()
+        conn.close()
+    except Exception as e:
         print(f"❌ DATABASE ERROR: {e}")
-    finally:
-        # 5. Safely close database connections
-        if connection:
-            cursor.close()
-            connection.close()
-
-# --- Test Script Execution ---
-if __name__ == "__main__":
-    print("Testing PostgreSQL connection...")
-    # Logging test metrics into the database
-    log_evaluation(
-        model_version="instruct-blip-v1",
-        cider_score=0.8542,
-        hallucination_rate=0.0210,
-        deployment_status="APPROVED"
-    )

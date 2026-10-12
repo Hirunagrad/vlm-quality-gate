@@ -1,71 +1,66 @@
-import numpy as np
-from PIL import Image
-from alibi_detect.cd import MMDDrift
+import os
 import sys
+import numpy as np
+from alibi_detect.cd import MMDDrift
+from feature_extractor import SemanticFeatureExtractor
 
-def preprocess_image(image_path):
-    # Open image, resize to a small resolution to keep math fast, convert to RGB
-    img = Image.open(image_path).convert('RGB').resize((64, 64))
-    # Convert to numpy array, normalize pixel values between 0 and 1, and flatten
-    img_array = np.array(img, dtype=np.float32) / 255.0
-    return img_array.flatten()
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+COCO_DIR = os.path.join(DATA_DIR, "coco_val100")
+OOD_DIR = os.path.join(DATA_DIR, "ood_medmnist100")
 
-def run_drift_detection():
-    print("Initializing MMD Drift Detector...")
+def run_production_drift_detection(sample_size=50):
+    print("=" * 60)
+    print("TSK-503: Evaluating Covariate Shift via CLIP Embeddings & MMD")
+    print("=" * 60)
+
+    extractor = SemanticFeatureExtractor()
+
+    # 1. Extract all COCO embeddings in one pass (100 images)
+    print(f"\n[1/3] Extracting COCO Embeddings (Total N={sample_size * 2})...")
+    coco_embeddings = extractor.extract_features(COCO_DIR, max_samples=sample_size * 2)
+    if len(coco_embeddings) < sample_size * 2:
+        print(f"ERROR: Expected {sample_size * 2} images in data/coco_val100, found {len(coco_embeddings)}")
+        sys.exit(1)
+
+    # Split into Baseline Reference (50) and Clean In-Distribution Traffic (50)
+    baseline_embeddings = coco_embeddings[:sample_size]
+    clean_test_embeddings = coco_embeddings[sample_size:sample_size * 2]
+
+    # 2. Initialize MMD Drift Detector with Gaussian Kernel
+    print("\n[2/3] Initializing Alibi-Detect MMD Detector (backend=pytorch, p_val=0.05)...")
+    cd = MMDDrift(baseline_embeddings, backend="pytorch", p_val=0.05)
+
+    # 3. Test In-Distribution Traffic (Clean COCO Images)
+    print("Evaluating In-Distribution Traffic (Clean COCO)...")
+    preds_clean = cd.predict(clean_test_embeddings)
+    is_drift_clean = bool(preds_clean["data"]["is_drift"])
+    p_val_clean = float(preds_clean["data"]["p_val"])
+    print(f"Clean Traffic Result -> Drift Detected: {is_drift_clean} | P-value: {p_val_clean:.4f}")
+
+    # 4. Test Out-of-Distribution Traffic (MedMNIST X-rays)
+    print(f"\n[3/3] Testing Out-of-Distribution Traffic (MedMNIST X-rays N={sample_size})...")
+    ood_embeddings = extractor.extract_features(OOD_DIR, max_samples=sample_size)
     
-    # 1. Load the reference image
-    try:
-        base_img = preprocess_image("test.jpg")
-    except FileNotFoundError:
-        print("CRITICAL ERROR: 'test.jpg' not found. Please ensure it is in the backend/ folder.")
-        return True # Default to blocking if file is missing
+    preds_ood = cd.predict(ood_embeddings)
+    is_drift_ood = bool(preds_ood["data"]["is_drift"])
+    p_val_ood = float(preds_ood["data"]["p_val"])
+    print(f"OOD Traffic Result   -> Drift Detected: {is_drift_ood} | P-value: {p_val_ood:.4f}")
 
-    # 2. Simulate a "Reference Dataset" (e.g., your COCO training data)
-    print("Generating reference distribution (Baseline)...")
-    np.random.seed(42)
-    reference_data = []
-    for _ in range(20):
-        noise = np.random.normal(0, 0.05, base_img.shape)
-        reference_data.append(base_img + noise)
-    reference_data = np.array(reference_data, dtype=np.float32)
+    print("\n" + "=" * 60)
+    print("Summary of Statistical Test:")
+    print(f"  Clean COCO Traffic:  Drift = {is_drift_clean} (p = {p_val_clean:.4f})")
+    print(f"  OOD MedMNIST Shift: Drift = {is_drift_ood} (p = {p_val_ood:.4f})")
+    print("=" * 60)
 
-    # 3. Initialize the MMD Drift Detector
-    cd = MMDDrift(reference_data, backend='pytorch', p_val=0.05)
-
-    # 4. Test Case A: Normal Traffic (No Drift)
-    print("\n--- Test Case A: Normal Traffic (Standard Image) ---")
-    # FIX: Add the same 5% variance to normal traffic so it matches the reference distribution
-    noise1 = np.random.normal(0, 0.05, base_img.shape)
-    noise2 = np.random.normal(0, 0.05, base_img.shape)
-    test_normal = np.array([base_img + noise1, base_img + noise2], dtype=np.float32) 
-    
-    preds_normal = cd.predict(test_normal)
-    is_drift_normal = bool(preds_normal['data']['is_drift'])
-    print(f"Result -> is_drift: {is_drift_normal} (P-value: {preds_normal['data']['p_val']:.4f})")
-
-    # 5. Test Case B: Bad Traffic (Drift)
-    print("\n--- Test Case B: Anomalous Traffic (Pure Static Noise) ---")
-    test_anomaly = np.random.uniform(0, 1, size=(2, base_img.shape[0])).astype(np.float32)
-    preds_anomaly = cd.predict(test_anomaly)
-    is_drift_anomaly = bool(preds_anomaly['data']['is_drift'])
-    print(f"Result -> is_drift: {is_drift_anomaly} (P-value: {preds_anomaly['data']['p_val']:.4f})")
-    
-    # 6. Final Output
-    print("\n" + "="*55)
-    print("TSK-203 Drift Evaluation Complete!")
-    print(f"Successfully returned boolean - Normal Traffic Blocked: {is_drift_normal}")
-    print("="*55 + "\n")
-    
-    return is_drift_normal
+    return is_drift_clean, is_drift_ood
 
 if __name__ == "__main__":
-    is_drift = run_drift_detection()
-    
-    # 6. Quality Gate Blocking Logic
-    print("\n" + "="*55)
-    if is_drift:
-        print("🚨 DRIFT DETECTED: Anomalous traffic blocked. Halting deployment!")
-        sys.exit(1)
-    else:
-        print("✅ DRIFT CHECK PASSED: Traffic is safe.")
+    is_drift_clean, is_drift_ood = run_production_drift_detection(sample_size=50)
+
+    # Quality Gate criteria: Clean traffic passes (no drift), OOD traffic is flagged (drift)
+    if not is_drift_clean and is_drift_ood:
+        print("\n✅ DRIFT QUALITY GATE VERIFIED: Clean data accepted, OOD domain shift successfully intercepted!")
         sys.exit(0)
+    else:
+        print("\n🚨 QUALITY GATE FAILED: Drift detector failed validation criteria.")
+        sys.exit(1)

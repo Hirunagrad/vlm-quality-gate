@@ -81,3 +81,10 @@ docs/_build/
 # PyBuilder
 target/
 maildir
+
+# Benchmark Datasets & Annotations
+backend/data/coco_val100/
+backend/data/ood_medmnist100/
+backend/data/annotations/
+backend/data/*.npz
+backend/data/*.zip
