@@ -7,6 +7,6 @@ medmnist
 evaluate
 rouge-score
 huggingface-hub==0.36.2
-dill==0.3.9
+dill==0.3.8
 pyarrow==15.0.2
 datasets==2.19.2
