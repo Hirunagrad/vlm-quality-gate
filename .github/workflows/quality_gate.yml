@@ -4,14 +4,11 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
   quality-evaluation:
     runs-on: ubuntu-latest
-    
+
     # 1. Spin up ephemeral Cloud Memory
     services:
       postgres:
@@ -37,7 +34,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      # 2. Build the evaluations table in the cloud database
       - name: Initialize Database Schema
         run: |
           sudo apt-get install -y postgresql-client
@@ -49,12 +45,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Enforce Data Drift Quality Gate
+      - name: Ingest Curated Benchmark Data
         run: |
           cd backend
-          python drift_detector.py
+          python download_data.py
 
-      - name: Execute Evaluation Engine & Log Results
+      - name: Execute Quality Gate (Bouncer -> Brain)
         run: |
           cd backend
+          
+          echo "--- 1. Running Drift Detector ---"
+          python drift_detector.py
+          
+          echo "--- 2. Running Evaluation Engine ---"
           python eval_engine.py
